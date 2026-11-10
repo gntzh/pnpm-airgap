@@ -34,7 +34,7 @@ describe('parseLockfile documents', () => {
 
     expect(result.lockfileVersion).toBe('9.0');
     expect([...result.packages.keys()]).toEqual(['pnpm@12.16.1', 'chalk@5.6.2']);
-    expect(result.skipped).toEqual({ nonRegistry: 0, invalid: 0, duplicate: 0, optional: 0 });
+    expect(result.skipped).toEqual({ nonRegistry: 0, invalid: 0, duplicate: 0, optional: 0, excluded: 0 });
 
     const documents = yaml.loadAll(await fs.readFile(multiDocumentFixture, 'utf8'));
     const separatePackages = new Map();
@@ -152,6 +152,55 @@ describe('parseLockfile documents', () => {
     expect(result.skipped.optional).toBe(2);
     expect(result.skipped.nonRegistry).toBe(1);
   });
+
+  it('excludes exact names across documents, versions and snapshots, counting each version once', async () => {
+    const filename = await writeDocuments([
+      {
+        lockfileVersion: '9.0',
+        packages: {
+          '@esbuild/darwin-arm64@1.0.0': { optional: true },
+          '@esbuild/darwin-arm64@2.0.0': {},
+          '@esbuild/darwin-arm64-extra@1.0.0': {},
+          '@esbuild/linux-arm64@1.0.0': { optional: true },
+        },
+        snapshots: { '@esbuild/darwin-arm64@1.0.0(peer@1.0.0)': {} },
+      },
+      {
+        lockfileVersion: '9.0',
+        packages: { '@esbuild/darwin-arm64@1.0.0': {} },
+        snapshots: { '@esbuild/darwin-arm64@3.0.0': {}, 'snapshot-only@1.0.0': {} },
+      },
+    ]);
+
+    const result = await parseLockfile(filename, {
+      excludePackages: ['@esbuild/darwin-arm64', '@esbuild/darwin-arm64'],
+    });
+    expect([...result.packages.keys()]).toEqual([
+      '@esbuild/darwin-arm64-extra@1.0.0',
+      '@esbuild/linux-arm64@1.0.0',
+      'snapshot-only@1.0.0',
+    ]);
+    expect(result.skipped.excluded).toBe(3);
+    expect((await parseLockfile(filename)).packages.size).toBe(6);
+    expect((await parseLockfile(filename, { excludePackages: [] })).packages.size).toBe(6);
+
+    for (const name of ['@esbuild/darwin-*', '@esbuild/Darwin-arm64', ' @esbuild/darwin-arm64 ']) {
+      const unmatched = await parseLockfile(filename, { excludePackages: [name] });
+      expect(unmatched.packages.size).toBe(6);
+      expect(unmatched.skipped.excluded).toBe(0);
+    }
+  });
+
+  it.each([null, 'chalk', {}, [null], [1], [''], ['   ']])(
+    'rejects invalid excludePackages before reading the lockfile: %j',
+    async (excludePackages) => {
+      await expect(
+        // Deliberately exercise invalid JSON configuration at the runtime boundary.
+        // @ts-expect-error invalid configuration
+        parseLockfile('/nonexistent-lockfile.yaml', { excludePackages })
+      ).rejects.toThrow('excludePackages must be an array of non-empty strings');
+    }
+  );
 
   it('rejects documents with different lockfile versions', async () => {
     const filename = await writeDocuments([

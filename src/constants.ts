@@ -91,6 +91,7 @@ export const DEFAULT_CONFIG: {
     registryUrl: string;
     registryStatePath: string | null;
     skipOptional: boolean;
+    excludePackages: string[];
     debug: boolean;
   };
   publish: {
@@ -131,6 +132,7 @@ export const DEFAULT_CONFIG: {
     registryUrl: 'https://registry.npmjs.org',
     registryStatePath: null,
     skipOptional: false,
+    excludePackages: [],
     debug: false,
   },
   publish: {

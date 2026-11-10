@@ -76,6 +76,7 @@ export interface FetchConfig {
   registryUrl: string;
   registryStatePath?: string | null;
   skipOptional: boolean;
+  excludePackages?: string[];
   debug: boolean;
 }
 

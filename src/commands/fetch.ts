@@ -41,6 +41,7 @@ export async function fetchDependencies(config: Partial<FetchConfig> = {}): Prom
     registryUrl,
     registryStatePath,
     skipOptional,
+    excludePackages,
     debug: debugEnabled,
   } = finalConfig;
 
@@ -63,8 +64,14 @@ export async function fetchDependencies(config: Partial<FetchConfig> = {}): Prom
 
   // Parse lockfile
   const parseSpinner = createSpinner('Parsing lockfile...');
-  const { packages } = await parseLockfile(lockfilePath, { registryUrl, skipOptional });
-  parseSpinner.succeed(`Found ${chalk.bold(packages.size)} packages in lockfile`);
+  const { packages, skipped: parseSkipped } = await parseLockfile(lockfilePath, {
+    registryUrl,
+    skipOptional,
+    excludePackages,
+  });
+  parseSpinner.succeed(
+    `Found ${chalk.bold(packages.size)} packages in lockfile (${parseSkipped.excluded} package versions excluded)`
+  );
 
   // Filter against registry state if provided
   let packagesToFetch = packages;
@@ -88,7 +95,9 @@ export async function fetchDependencies(config: Partial<FetchConfig> = {}): Prom
   }
 
   if (packagesToFetch.size === 0) {
-    console.log(chalk.green('\n✓ All packages already exist!'));
+    console.log(chalk.green(packages.size === 0
+      ? '\n✓ No packages to fetch.'
+      : '\n✓ All packages already exist!'));
     return {
       success: true,
       total: packages.size,

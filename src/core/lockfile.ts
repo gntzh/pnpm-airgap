@@ -115,6 +115,7 @@ export function constructTarballUrl(
 export interface ParseLockfileOptions {
   registryUrl?: string;
   skipOptional?: boolean;
+  excludePackages?: string[];
 }
 
 export interface ParseLockfileResult {
@@ -124,6 +125,7 @@ export interface ParseLockfileResult {
     invalid: number;
     duplicate: number;
     optional: number;
+    excluded: number;
   };
   lockfileVersion: string;
 }
@@ -136,6 +138,16 @@ export async function parseLockfile(
   options: ParseLockfileOptions = {}
 ): Promise<ParseLockfileResult> {
   const { registryUrl = DEFAULTS.NPM_REGISTRY_URL, skipOptional = false } = options;
+
+  const { excludePackages = [] } = options;
+  if (
+    !Array.isArray(excludePackages) ||
+    excludePackages.some((name) => typeof name !== 'string' || name.trim().length === 0)
+  ) {
+    throw new Error('excludePackages must be an array of non-empty strings');
+  }
+  const excludedNames = new Set(excludePackages);
+  const excludedVersions = new Set<string>();
 
   const content = await fs.readFile(lockfilePath, 'utf8');
   const documents = yaml.loadAll(content);
@@ -150,7 +162,7 @@ export async function parseLockfile(
   });
 
   const packages = new Map<string, LockfilePackage>();
-  const skipped = { nonRegistry: 0, invalid: 0, duplicate: 0, optional: 0 };
+  const skipped = { nonRegistry: 0, invalid: 0, duplicate: 0, optional: 0, excluded: 0 };
 
   const lockfileVersion = String(lockfiles[0].lockfileVersion || '6.0');
   for (const [index, lockfile] of lockfiles.entries()) {
@@ -169,11 +181,6 @@ export async function parseLockfile(
   for (const lockfile of lockfiles) {
     if (!lockfile.packages) continue;
     for (const [key, value] of Object.entries(lockfile.packages)) {
-      if (skipOptional && value?.optional === true) {
-        skipped.optional++;
-        continue;
-      }
-
       const packageInfo = parsePackageKey(key);
       if (!packageInfo) {
         skipped.nonRegistry++;
@@ -182,6 +189,16 @@ export async function parseLockfile(
 
       const { name, version } = packageInfo;
       const packageId = `${name}@${version}`;
+
+      if (excludedNames.has(name)) {
+        excludedVersions.add(packageId);
+        continue;
+      }
+
+      if (skipOptional && value?.optional === true) {
+        skipped.optional++;
+        continue;
+      }
 
       if (packages.has(packageId)) {
         skipped.duplicate++;
@@ -225,6 +242,11 @@ export async function parseLockfile(
       const { name, version } = packageInfo;
       const packageId = `${name}@${version}`;
 
+      if (excludedNames.has(name)) {
+        excludedVersions.add(packageId);
+        continue;
+      }
+
       if (packages.has(packageId)) continue;
 
       packages.set(packageId, {
@@ -239,9 +261,11 @@ export async function parseLockfile(
     }
   }
 
+  skipped.excluded = excludedVersions.size;
+
   debug(`Parsed ${packages.size} packages from lockfile`);
   debug(
-    `Skipped: ${skipped.nonRegistry} non-registry, ${skipped.invalid} invalid, ${skipped.duplicate} duplicate, ${skipped.optional} optional`
+    `Skipped: ${skipped.nonRegistry} non-registry, ${skipped.invalid} invalid, ${skipped.duplicate} duplicate, ${skipped.optional} optional, ${skipped.excluded} excluded`
   );
 
   return { packages, skipped, lockfileVersion };

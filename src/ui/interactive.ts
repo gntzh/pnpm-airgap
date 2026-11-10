@@ -220,6 +220,7 @@ async function interactiveFetch(): Promise<void> {
 
   console.log('');
   await fetchDependencies({
+    excludePackages: config.fetch.excludePackages,
     lockfilePath,
     outputDir,
     registryUrl,

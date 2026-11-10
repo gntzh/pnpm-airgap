@@ -272,7 +272,8 @@ Create `pnpm-airgap.config.json`:
     "outputDir": "./airgap-packages",
     "concurrency": 16,
     "registryUrl": "https://registry.npmjs.org",
-    "skipOptional": false
+    "skipOptional": false,
+    "excludePackages": []
   },
   "publish": {
     "packagesDir": "./airgap-packages",
@@ -289,6 +290,16 @@ Create `pnpm-airgap.config.json`:
   }
 }
 ```
+
+`fetch.excludePackages` excludes exact, case-sensitive package names (for example,
+`["@esbuild/darwin-arm64", "@esbuild/darwin-x64"]`) across all versions, including
+optional dependencies and snapshot-only entries. Omit it or use `[]` to exclude
+nothing. Entries must be non-empty strings; duplicates are ignored. Names are not
+trimmed or normalized, and glob/regex patterns are not supported.
+
+This setting applies to CLI and interactive fetch only. Existing tarballs are
+kept; publish still scans all tarballs in its input directory. Fetch reports the
+number of distinct package versions excluded and has no dry-run option.
 
 ## Features
 
