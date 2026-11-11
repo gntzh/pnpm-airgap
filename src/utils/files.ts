@@ -3,6 +3,8 @@
  */
 
 import fs from 'fs-extra';
+import path from 'node:path';
+import { validateFile } from './validation.js';
 import { SIZES, TIMEOUTS } from '../constants.js';
 
 /**
@@ -54,4 +56,13 @@ export function calculateTimeoutSync(filePath: string): number {
  */
 export function generateFilename(name: string, version: string): string {
   return `${name.replace('/', '-').replace('@', '')}-${version}.tgz`;
+}
+
+/** Read an exclusion list: one exact package name per line. */
+export async function readExcludedPackages(filePath: string): Promise<string[]> {
+  const resolvedPath = path.resolve(filePath);
+  await validateFile(resolvedPath, 'Exclude packages file');
+  const content = await fs.readFile(resolvedPath, 'utf8');
+  const names = content.split(/\r?\n/).map((line) => line.trim());
+  return [...new Set(names.filter((name) => name.length > 0 && !name.startsWith('#')))];
 }

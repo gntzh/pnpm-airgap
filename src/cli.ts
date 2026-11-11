@@ -14,6 +14,7 @@ import { exportRegistryState, registryStateFromLockfile } from './commands/regis
 import { prunePackages } from './commands/prune.js';
 import { runInteractiveMode } from './ui/interactive.js';
 import { DEFAULT_CONFIG } from './constants.js';
+import { readExcludedPackages } from './utils/files.js';
 
 // Version is injected at build time via tsup define
 const packageVersion = process.env.npm_package_version || '2.5.0';
@@ -34,6 +35,7 @@ program
   .option('-o, --output <path>', 'Output directory for packages')
   .option('-r, --registry <url>', 'Source registry URL')
   .option('--registry-state <path>', 'Registry state file for incremental fetching')
+  .option('--exclude-packages <file>', 'File with one exact package name to exclude per line')
   .option('--skip-optional', 'Skip optional dependencies')
   .option('--concurrency <number>', 'Concurrent downloads', parseInt)
   .option('--debug', 'Enable debug output')
@@ -43,6 +45,9 @@ program
 
       const result = await fetchDependencies({
         ...config.fetch,
+        ...(options.excludePackages !== undefined && {
+          excludePackages: await readExcludedPackages(options.excludePackages),
+        }),
         ...(options.lockfile && { lockfilePath: options.lockfile }),
         ...(options.output && { outputDir: options.output }),
         ...(options.registry && { registryUrl: options.registry }),

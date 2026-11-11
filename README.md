@@ -102,10 +102,31 @@ Options:
   -o, --output <path>        Output directory (default: ./airgap-packages)
   -r, --registry <url>       Source registry (default: https://registry.npmjs.org)
   --registry-state <path>    Registry state file for incremental fetching
+  --exclude-packages <file>  File with one exact package name to exclude per line
   --skip-optional            Skip optional dependencies
   --concurrency <number>     Parallel downloads (default: 16)
   --debug                    Enable debug output
 ```
+
+Use an exclusion file for a single fetch:
+
+```bash
+node cli.cjs fetch --exclude-packages ./excluded-packages.txt
+```
+
+```text
+# Unneeded macOS packages
+@esbuild/darwin-arm64
+@esbuild/darwin-x64
+```
+
+The UTF-8 file accepts LF or CRLF lines. Leading/trailing whitespace, blank lines,
+and whole-line `#` comments are ignored; duplicates are removed. Entries are exact,
+case-sensitive package names, with no inline comments, glob/regex patterns, or `!`
+negation. The file replaces `fetch.excludePackages` for this invocation; an empty
+file disables exclusions. Without the flag, the config list applies. Relative
+paths resolve from the current working directory. A missing, unreadable, or
+non-file path fails before fetching.
 
 ### `publish` - Publish packages to registry
 
