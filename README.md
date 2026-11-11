@@ -102,7 +102,7 @@ Options:
   -o, --output <path>        Output directory (default: ./airgap-packages)
   -r, --registry <url>       Source registry (default: https://registry.npmjs.org)
   --registry-state <path>    Registry state file for incremental fetching
-  --exclude-packages <file>  File with one exact package name to exclude per line
+  --exclude-packages <file>  File with one package-name glob rule per line
   --skip-optional            Skip optional dependencies
   --concurrency <number>     Parallel downloads (default: 16)
   --debug                    Enable debug output
@@ -115,15 +115,26 @@ node cli.cjs fetch --exclude-packages ./excluded-packages.txt
 ```
 
 ```text
-# Unneeded macOS packages
-@esbuild/darwin-arm64
-@esbuild/darwin-x64
+# Exclude esbuild platform packages, keeping Linux x64 and arm64
+@esbuild/*
+! @esbuild/linux-{x64,arm64}
+
+# Exclude musl variants
+@libsql/*-musl
 ```
 
 The UTF-8 file accepts LF or CRLF lines. Leading/trailing whitespace, blank lines,
-and whole-line `#` comments are ignored; duplicates are removed. Entries are exact,
-case-sensitive package names, with no inline comments, glob/regex patterns, or `!`
-negation. The file replaces `fetch.excludePackages` for this invocation; an empty
+and whole-line `#` comments are ignored; duplicates are removed. Rules match full,
+case-sensitive package names using [Picomatch](https://github.com/micromatch/picomatch)
+(globs, braces, and extglobs); `*` does not cross the scope separator `/`.
+A prefix of `! ` (an exclamation mark followed by an ASCII space) marks a keep
+exception. Exceptions always take priority, regardless of line order. They exempt
+packages from name filtering only, not from other filters such as `skipOptional`.
+A blank `! ` exception is an error. Without the space, `!pattern` and `!(...)`
+retain Picomatch's native negation and extglob meaning. This is a package-rule
+format, not gitignore syntax; inline comments are not supported.
+
+The file replaces `fetch.excludePackages` for this invocation; an empty
 file disables exclusions. Without the flag, the config list applies. Relative
 paths resolve from the current working directory. A missing, unreadable, or
 non-file path fails before fetching.
@@ -312,11 +323,17 @@ Create `pnpm-airgap.config.json`:
 }
 ```
 
-`fetch.excludePackages` excludes exact, case-sensitive package names (for example,
-`["@esbuild/darwin-arm64", "@esbuild/darwin-x64"]`) across all versions, including
-optional dependencies and snapshot-only entries. Omit it or use `[]` to exclude
-nothing. Entries must be non-empty strings; duplicates are ignored. Names are not
-trimmed or normalized, and glob/regex patterns are not supported.
+`fetch.excludePackages` uses the same package-name rules as the file option,
+including `! ` keep exceptions. For example:
+
+```json
+["@esbuild/*", "! @esbuild/linux-{x64,arm64}"]
+```
+
+Rules apply across all versions, including optional dependencies and snapshot-only
+entries. Omit the setting or use `[]` to exclude nothing. Entries must be non-empty
+strings and are trimmed before matching. Exact package names remain supported.
+Matching functions are compiled once per lockfile parse.
 
 This setting applies to CLI and interactive fetch only. Existing tarballs are
 kept; publish still scans all tarballs in its input directory. Fetch reports the

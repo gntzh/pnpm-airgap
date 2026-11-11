@@ -58,7 +58,7 @@ export function generateFilename(name: string, version: string): string {
   return `${name.replace('/', '-').replace('@', '')}-${version}.tgz`;
 }
 
-/** Read an exclusion list: one exact package name per line. */
+/** Read an exclusion list: one package-name rule per line. */
 export async function readExcludedPackages(filePath: string): Promise<string[]> {
   const resolvedPath = path.resolve(filePath);
   await validateFile(resolvedPath, 'Exclude packages file');

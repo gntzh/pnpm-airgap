@@ -181,10 +181,15 @@ describe('parseLockfile documents', () => {
       'snapshot-only@1.0.0',
     ]);
     expect(result.skipped.excluded).toBe(3);
+    const globResult = await parseLockfile(filename, {
+      excludePackages: ['@esbuild/darwin-*', '! @esbuild/darwin-arm64-extra'],
+    });
+    expect(globResult.packages).toEqual(result.packages);
+    expect(globResult.skipped.excluded).toBe(3);
     expect((await parseLockfile(filename)).packages.size).toBe(6);
     expect((await parseLockfile(filename, { excludePackages: [] })).packages.size).toBe(6);
 
-    for (const name of ['@esbuild/darwin-*', '@esbuild/Darwin-arm64', ' @esbuild/darwin-arm64 ']) {
+    for (const name of ['@esbuild/Darwin-arm64', '@esbuild/win32-*']) {
       const unmatched = await parseLockfile(filename, { excludePackages: [name] });
       expect(unmatched.packages.size).toBe(6);
       expect(unmatched.skipped.excluded).toBe(0);

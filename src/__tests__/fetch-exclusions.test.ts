@@ -37,7 +37,7 @@ describe('fetch exclusions', () => {
       await fs.writeFile(path.join(outputDir, filename), 'existing tarball');
     }
 
-    const result = await fetchDependencies({ lockfilePath, outputDir, excludePackages: ['exclude'] });
+    const result = await fetchDependencies({ lockfilePath, outputDir, excludePackages: ['*', '! keep'] });
     expect(result).toMatchObject({ success: true, total: 1, downloaded: 0, skipped: 1, failed: 0 });
     const metadata = await fs.readJson(path.join(outputDir, 'metadata.json'));
     expect(metadata.packageCount).toBe(1);

@@ -8,6 +8,7 @@ import yaml from 'js-yaml';
 import type { LockfilePackage } from '../types.js';
 import { DEFAULTS } from '../constants.js';
 import { debug } from '../utils/logger.js';
+import { createPackageExclusionMatcher } from './package-filter.js';
 import { isValidVersion } from '../utils/validation.js';
 
 interface LockfileData {
@@ -140,13 +141,7 @@ export async function parseLockfile(
   const { registryUrl = DEFAULTS.NPM_REGISTRY_URL, skipOptional = false } = options;
 
   const { excludePackages = [] } = options;
-  if (
-    !Array.isArray(excludePackages) ||
-    excludePackages.some((name) => typeof name !== 'string' || name.trim().length === 0)
-  ) {
-    throw new Error('excludePackages must be an array of non-empty strings');
-  }
-  const excludedNames = new Set(excludePackages);
+  const isExcluded = createPackageExclusionMatcher(excludePackages);
   const excludedVersions = new Set<string>();
 
   const content = await fs.readFile(lockfilePath, 'utf8');
@@ -190,7 +185,7 @@ export async function parseLockfile(
       const { name, version } = packageInfo;
       const packageId = `${name}@${version}`;
 
-      if (excludedNames.has(name)) {
+      if (isExcluded(name)) {
         excludedVersions.add(packageId);
         continue;
       }
@@ -242,7 +237,7 @@ export async function parseLockfile(
       const { name, version } = packageInfo;
       const packageId = `${name}@${version}`;
 
-      if (excludedNames.has(name)) {
+      if (isExcluded(name)) {
         excludedVersions.add(packageId);
         continue;
       }

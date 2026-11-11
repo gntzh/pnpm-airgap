@@ -3,6 +3,7 @@ import fs from 'fs-extra';
 import os from 'node:os';
 import path from 'node:path';
 import { readExcludedPackages } from '../utils/files.js';
+import { createPackageExclusionMatcher } from '../core/package-filter.js';
 
 const { fetchDependencies } = vi.hoisted(() => ({ fetchDependencies: vi.fn() }));
 vi.mock('../commands/fetch.js', () => ({ fetchDependencies }));
@@ -43,11 +44,18 @@ describe('CLI exclusion files', () => {
     ]);
   });
 
+  it('rejects a blank keep exception after file whitespace normalization', async () => {
+    const filename = path.join(tempDir, 'blank-keep.txt');
+    await fs.writeFile(filename, '@esbuild/*\n!   \r\n');
+    const rules = await readExcludedPackages(filename);
+    expect(() => createPackageExclusionMatcher(rules)).toThrow('requires a non-empty pattern');
+  });
+
   it('replaces the config list with the file contents', async () => {
     const filename = path.join(tempDir, 'exclude.txt');
-    await fs.writeFile(filename, ' from-file \nfrom-file\n');
+    await fs.writeFile(filename, ' from-file* \n! from-file-linux-*\nfrom-file*\n');
     await runFetch(['--exclude-packages', path.relative(process.cwd(), filename)]);
-    expect(fetchDependencies).toHaveBeenCalledWith({ excludePackages: ['from-file'] });
+    expect(fetchDependencies).toHaveBeenCalledWith({ excludePackages: ['from-file*', '! from-file-linux-*'] });
     expect(process.exit).toHaveBeenCalledWith(0);
   });
 

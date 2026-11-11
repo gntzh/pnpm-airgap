@@ -35,7 +35,7 @@ program
   .option('-o, --output <path>', 'Output directory for packages')
   .option('-r, --registry <url>', 'Source registry URL')
   .option('--registry-state <path>', 'Registry state file for incremental fetching')
-  .option('--exclude-packages <file>', 'File with one exact package name to exclude per line')
+  .option('--exclude-packages <file>', 'File with one package-name glob rule per line')
   .option('--skip-optional', 'Skip optional dependencies')
   .option('--concurrency <number>', 'Concurrent downloads', parseInt)
   .option('--debug', 'Enable debug output')
