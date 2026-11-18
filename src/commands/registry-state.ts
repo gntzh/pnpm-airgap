@@ -153,19 +153,27 @@ export async function exportRegistryState(config: Partial<RegistryStateConfig> =
     debug('Found auth token for registry');
   }
 
+  const errors: Array<{ package: string; error: string }> = [];
+
   // Get list of all packages
   const listSpinner = createSpinner('Fetching package list...');
   let packageList: Map<string, { name: string; versions: Record<string, unknown> }>;
 
   try {
-    packageList = await listAllPackages(registryUrl, { scope, authHeader });
-    listSpinner.succeed(`Found ${packageList.size} packages`);
+    packageList = await listAllPackages(registryUrl, {
+      scope,
+      authHeader,
+      onError: (error) => errors.push({ package: '<listing>', error: error.message }),
+    });
+    if (errors.length) listSpinner.warn(`Listing incomplete; found ${packageList.size} packages`);
+    else listSpinner.succeed(`Found ${packageList.size} packages`);
   } catch (error) {
     listSpinner.fail('Failed to list packages');
     throw error;
   }
 
   if (packageList.size === 0) {
+    if (errors.length) throw new Error(errors.map((item) => item.error).join('; '));
     console.log(chalk.yellow('No packages found'));
 
     const emptyState: RegistryState = {
@@ -176,6 +184,7 @@ export async function exportRegistryState(config: Partial<RegistryStateConfig> =
       packages: {},
     };
 
+    await fs.ensureDir(path.dirname(outputPath));
     await fs.writeJson(outputPath, emptyState, { spaces: 2 });
     return { success: true, stats: emptyState.stats };
   }
@@ -185,8 +194,6 @@ export async function exportRegistryState(config: Partial<RegistryStateConfig> =
   const packages: Record<string, string[]> = {};
   let totalVersions = 0;
   let processed = 0;
-  const errors: Array<{ package: string; error: string }> = [];
-
   const limit = pLimit(concurrency);
   const packageNames = Array.from(packageList.keys());
 
@@ -194,20 +201,28 @@ export async function exportRegistryState(config: Partial<RegistryStateConfig> =
     packageNames.map((name) =>
       limit(async () => {
         try {
-          const metadata = await getPackageMetadata(name, registryUrl, { authHeader, abbreviated: true });
+          const metadata = await getPackageMetadata(name, registryUrl, {
+            authHeader,
+            abbreviated: true,
+            throwOnError: true,
+          });
 
-          if (metadata?.versions) {
+          if (
+            metadata?.name === name && metadata.versions &&
+            typeof metadata.versions === 'object' && !Array.isArray(metadata.versions) &&
+            Object.values(metadata.versions).every((value) =>
+              value !== null && typeof value === 'object' && !Array.isArray(value))
+          ) {
             const versions = Object.keys(metadata.versions);
             packages[name] = versions;
             totalVersions += versions.length;
             debug(`${name}: ${versions.length} versions`);
           } else {
-            packages[name] = [];
+            throw new Error('Invalid package version metadata');
           }
         } catch (error) {
           debug(`Error fetching metadata for ${name}: ${(error as Error).message}`);
           errors.push({ package: name, error: (error as Error).message });
-          packages[name] = [];
         }
 
         processed++;
@@ -237,7 +252,9 @@ export async function exportRegistryState(config: Partial<RegistryStateConfig> =
   await fs.ensureDir(path.dirname(outputPath));
   await fs.writeJson(outputPath, registryState, { spaces: 2 });
 
-  console.log(chalk.green(`\n✓ Registry state exported to: ${outputPath}`));
+  for (const item of errors) console.error(chalk.red(`${item.package}: ${item.error}`));
+  const exportMessage = errors.length ? 'Partial registry state' : 'Registry state';
+  console.log((errors.length ? chalk.yellow : chalk.green)(`\n${exportMessage} exported to: ${outputPath}`));
   console.log(chalk.gray(`  ${registryState.stats.totalPackages} packages, ${registryState.stats.totalVersions} versions`));
 
   return {

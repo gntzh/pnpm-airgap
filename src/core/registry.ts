@@ -168,7 +168,7 @@ export interface PackageMetadata {
 export async function getPackageMetadata(
   packageName: string,
   registryUrl: string,
-  options: { authHeader?: string | null; abbreviated?: boolean } = {}
+  options: { authHeader?: string | null; abbreviated?: boolean; throwOnError?: boolean } = {}
 ): Promise<PackageMetadata | null> {
   const { authHeader = null, abbreviated = false } = options;
 
@@ -199,109 +199,12 @@ export async function getPackageMetadata(
     return response.data;
   } catch (error) {
     debug(`Failed to get metadata for ${packageName}: ${(error as Error).message}`);
+    if (options.throwOnError) throw error;
     return null;
   }
 }
 
-/**
- * List all packages from a registry
- */
-export async function listAllPackages(
-  registryUrl: string,
-  options: { scope?: string | null; authHeader?: string | null } = {}
-): Promise<Map<string, PackageMetadata>> {
-  const { scope = null, authHeader = null } = options;
-
-  const headers: Record<string, string> = {};
-  if (authHeader) {
-    headers['Authorization'] = authHeader;
-  }
-
-  const packages = new Map<string, PackageMetadata>();
-
-  const endpoints = [
-    '/-/all',
-    '/-/v1/search?text=*&size=5000',
-    '/_all_docs',
-  ];
-
-  for (const endpoint of endpoints) {
-    try {
-      const url = `${registryUrl.replace(/\/$/, '')}${endpoint}`;
-      debug(`Trying endpoint: ${url}`);
-
-      const response = await axios.get(url, {
-        headers,
-        httpAgent,
-        httpsAgent,
-        timeout: TIMEOUTS.MAX,
-        maxContentLength: 500 * 1024 * 1024,
-        validateStatus: (status) => status === 200,
-      });
-
-      const data = response.data;
-
-      if (typeof data === 'object' && !Array.isArray(data)) {
-        if (data._updated) {
-          delete data._updated;
-        }
-
-        for (const [name, meta] of Object.entries(data)) {
-          if (scope && !name.startsWith(`${scope}/`)) {
-            continue;
-          }
-
-          const typedMeta = meta as Record<string, unknown>;
-          packages.set(name, {
-            name,
-            versions: (typedMeta.versions || typedMeta['dist-tags'] || {}) as Record<string, { dist?: { tarball?: string } }>,
-            'dist-tags': typedMeta['dist-tags'] as Record<string, string>,
-            time: typedMeta.time as Record<string, string>,
-          });
-        }
-
-        debug(`Found ${packages.size} packages from /-/all endpoint`);
-        return packages;
-      }
-
-      if (data.objects && Array.isArray(data.objects)) {
-        for (const obj of data.objects) {
-          const name = obj.package?.name;
-          if (!name) continue;
-
-          if (scope && !name.startsWith(`${scope}/`)) {
-            continue;
-          }
-
-          packages.set(name, {
-            name,
-            versions: {},
-            'dist-tags': {},
-          });
-        }
-
-        debug(`Found ${packages.size} packages from search API`);
-        return packages;
-      }
-    } catch (error) {
-      debug(`Endpoint ${endpoint} failed: ${(error as Error).message}`);
-      continue;
-    }
-  }
-
-  if (packages.size === 0) {
-    throw new Error(
-      `Could not list packages from registry ${registryUrl}\n` +
-        `The registry may not support package listing, or authentication may be required.\n` +
-        `You can try:\n` +
-        `  1. Providing an auth token\n` +
-        `  2. Using a package list file with --package-list\n` +
-        `  3. Specifying scopes to sync with --scope`
-    );
-  }
-
-  return packages;
-}
+export { listAllPackages } from './registry-listing.js';
 
 /**
  * Clear package existence cache

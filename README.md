@@ -240,6 +240,24 @@ node cli.cjs registry-state export -r http://localhost:4873 -o registry-state.js
 node cli.cjs fetch -l pnpm-lock.yaml --registry-state registry-state.json
 ```
 
+HTTP export tries `/-/all`, CouchDB `/_all_docs`, and Verdaccio's
+`/-/verdaccio/data/packages` (requires the web API). It exports packages visible
+to the current credentials. The Verdaccio web endpoint lists locally published
+packages; it is not an inventory of cached upstream tarballs.
+
+Search is a last resort: `text=*` is not a portable wildcard (Verdaccio 7.1.1
+returns no matches for it). Search pages are followed, but search alone cannot
+prove a complete inventory, so the command reports an incomplete export and
+exits nonzero. Server pagination limits or repeated pages also cause an error.
+If listing fails partway through, the command still exports versions for names
+already discovered. Packages whose metadata cannot be read are omitted. Errors
+are printed by the command; the output file format stays unchanged.
+
+Use HTTP state as an offline inventory only for a registry without uplinks or
+historically cached upstream metadata. HTTP version metadata can advertise
+upstream versions whose tarballs are not stored locally; export does not verify
+tarball storage. A Verdaccio storage-based inventory is a separate feature.
+
 ### `prune` - Remove stale versions from a registry
 
 Private registries (Verdaccio, etc.) have **no garbage collection** - every published
